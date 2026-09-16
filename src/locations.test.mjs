@@ -597,3 +597,27 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
 });
+
+test('searchAndFlyTo resolves Antarctica, Tokyo, New York and returns null for invalid location', async () => {
+  const viewer = stubViewer();
+  const priorFetch = globalThis.fetch;
+  // Mock fetch returning ZERO_RESULTS to test fallback path
+  globalThis.fetch = async () => ({
+    json: async () => ({ status: 'ZERO_RESULTS', results: [] }),
+  });
+  try {
+    const antarcticaResult = await searchAndFlyTo(viewer, 'Antarctica');
+    assert.ok(antarcticaResult, 'Antarctica must resolve');
+
+    const tokyoResult = await searchAndFlyTo(viewer, 'Tokyo');
+    assert.ok(tokyoResult, 'Tokyo must resolve');
+
+    const nycResult = await searchAndFlyTo(viewer, 'New York');
+    assert.ok(nycResult, 'New York must resolve');
+
+    const invalidResult = await searchAndFlyTo(viewer, 'xyz_non_existent_location_99999');
+    assert.equal(invalidResult, null, 'invalid location must return null');
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});

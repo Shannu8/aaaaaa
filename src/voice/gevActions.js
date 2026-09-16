@@ -176,6 +176,13 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['icebergs', 'local-icebergs'],
+  ['iceberg', 'local-icebergs'],
+  ['iceberg layer', 'local-icebergs'],
+  ['icebergs layer', 'local-icebergs'],
+  ['sea ice', 'local-sea-ice'],
+  ['sea-ice', 'local-sea-ice'],
+  ['ice concentration', 'local-sea-ice'],
 ]);
 
 const CITY_ALIASES = new Map([
@@ -315,6 +322,117 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
       if (adjustOrbitRange(zoomOut ? factor : 1 / factor)) {
         return { ok: true, action: 'adjust_camera_zoom', direction: zoomOut ? 'out' : 'in', amount: amt, orbitRadiusAdjusted: true };
+      }
+    }
+
+    if (name === 'get_sea_ice_concentration') {
+      const lat = Number(args.latitude ?? args.lat);
+      const lon = Number(args.longitude ?? args.lon);
+      try {
+        const res = await fetch(`/api/sea-ice/point?lat=${lat}&lon=${lon}`);
+        const data = await res.json();
+        return { ok: true, action: 'get_sea_ice_concentration', ...data };
+      } catch (err) {
+        return { ok: false, action: 'get_sea_ice_concentration', error: err?.message };
+      }
+    }
+
+    if (name === 'get_sea_ice_profile') {
+      const points = Array.isArray(args.points) ? args.points : [];
+      try {
+        const res = await fetch('/api/sea-ice/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ points }),
+        });
+        const data = await res.json();
+        return { ok: true, action: 'get_sea_ice_profile', ...data };
+      } catch (err) {
+        return { ok: false, action: 'get_sea_ice_profile', error: err?.message };
+      }
+    }
+
+    if (name === 'calculate_maritime_route') {
+      const start = args.start || { latitude: Number(args.start_lat), longitude: Number(args.start_lon) };
+      const destination = args.destination || { latitude: Number(args.dest_lat), longitude: Number(args.dest_lon) };
+      const mode = args.mode || 'balanced';
+      const safetyBufferKm = Number(args.safety_buffer_km) || 5.0;
+      try {
+        const res = await fetch('/api/route/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start,
+            destination,
+            mode,
+            safety_buffer_km: safetyBufferKm,
+            multi_route: true,
+          }),
+        });
+        const data = await res.json();
+        return { ok: data.status === 'success', action: 'calculate_maritime_route', ...data };
+      } catch (err) {
+        return { ok: false, action: 'calculate_maritime_route', error: err?.message };
+      }
+    }
+
+    if (name === 'get_voyage_guidance') {
+      try {
+        const activeRoute = window.__activeMaritimeRoute || args.route || null;
+        if (!activeRoute) {
+          return {
+            ok: false,
+            action: 'get_voyage_guidance',
+            error: 'No active maritime route available. Calculate a route first.',
+          };
+        }
+
+        const vesselState = window.__activeVessel || args.vesselState || (args.current_position ? {
+          latitude: Number(args.current_position.latitude),
+          longitude: Number(args.current_position.longitude),
+          heading: Number(args.current_position.heading),
+          speedKnots: Number(args.current_position.speed_knots || args.current_position.speed),
+        } : null);
+
+        let g = null;
+        try {
+          const res = await fetch('/api/route/guidance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              route: activeRoute,
+              vesselState,
+              options: {
+                plannedSpeedKnots: Number(args.planned_speed_knots) || 18.0,
+              },
+            }),
+          });
+          const data = await res.json();
+          if (data.status === 'success') g = data.guidance;
+        } catch (_e) {
+          // fallback to client-side guidance single source of truth
+          g = window.__activeVoyageGuidance || null;
+        }
+
+        if (!g && window.__activeVoyageGuidance) {
+          g = window.__activeVoyageGuidance;
+        }
+
+        return {
+          ok: Boolean(g),
+          action: 'get_voyage_guidance',
+          guidance: g,
+          routeMetrics: activeRoute?.metrics || null,
+          waypoints: activeRoute?.waypoints || [],
+          spokenSummary: g ? `
+Your next waypoint is ${g.nextWaypoint?.id || 'WP-01'}.
+The required course is ${g.requiredBearingDegrees}° true, ${g.compassDirection?.toLowerCase() || 'southwest'}.
+The waypoint is ${g.distanceToNextKm} kilometers away.
+Remaining route distance is ${g.distanceRemainingKm} kilometers.
+          `.trim() : 'Guidance information unavailable.',
+        };
+      } catch (err) {
+        return { ok: false, action: 'get_voyage_guidance', error: err?.message };
       }
     }
 
@@ -1272,7 +1390,7 @@ async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair
   options.signal?.addEventListener('abort', cancelFromTurn, { once: true });
   const timer = setTimeout(() => controller.abort(), 6000);
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+    const url = `/api/google/geocode?address=${encodeURIComponent(query)}`;
     const response = await fetch(url, { signal: controller.signal });
     const body = await response.json();
     if (!radioActionIsCurrent(options)) throw radioAbortError();
@@ -2946,7 +3064,7 @@ async function reverseGeocode(latitude, longitude) {
 
   const request = (async () => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${latitude},${longitude}`)}&key=${apiKey}`;
+      const url = `/api/google/geocode?latlng=${encodeURIComponent(`${latitude},${longitude}`)}`;
       const response = await fetchWithTimeout(url, {}, 5000);
       const data = await response.json();
       if (data.status !== 'OK' || !data.results?.length) {

@@ -20,6 +20,7 @@ import { registerDataCredits } from './data/dataCredits.js';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
+import { initGevGeminiVoiceCommands } from './voice/geminiVoice.js';
 import { MapStackController } from './mapStackController.js';
 import { initAnnotations } from './annotations/index.js';
 import { initLogoGaze } from './logoGaze.js';
@@ -35,6 +36,7 @@ import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
+import { initRoutePlanner } from './routePlanner.js';
 
 initLogoGaze();
 
@@ -71,6 +73,9 @@ function describeError(error) {
  */
 async function init() {
   const loadingScreen = document.getElementById('loading-screen');
+  if (loadingScreen) {
+    loadingScreen.addEventListener('click', () => loadingScreen.classList.add('hidden'));
+  }
   const loaderStatus = loadingScreen.querySelector('.loader-status');
 
   try {
@@ -249,8 +254,13 @@ async function init() {
 
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
+    // Bounded to 2500 ms max so slow layer fetches (e.g. Overpass retries)
+    // never block startup cover dismissal or trap mouse/wheel events on the globe.
     void Promise.all([
-      styleManager.initialRestorePromise,
+      Promise.race([
+        styleManager.initialRestorePromise,
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]),
       new Promise((resolve) => setTimeout(resolve, 1000)),
     ]).finally(() => {
       loadingScreen.classList.add('hidden');
@@ -328,7 +338,14 @@ async function init() {
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
     };
-    window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    window.__godsEyeView.voiceCommands = initGevVoiceCommands({
+      viewer,
+      styleManager,
+      dataManager,
+      sceneDirector,
+      annotations,
+    });
+    window.__godsEyeView.routePlanner = initRoutePlanner({ viewer });
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

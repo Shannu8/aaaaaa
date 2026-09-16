@@ -43,6 +43,7 @@
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
     "@mapbox/vector-tile": "^3.0.0",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",

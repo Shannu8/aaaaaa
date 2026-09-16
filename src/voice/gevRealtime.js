@@ -416,6 +416,7 @@ export class GevRealtimeController {
       });
       if (this.abandonStart(epoch, { localStream, localPc })) return;
       this.stream = localStream;
+      console.log('[OPENAI VOICE] microphone started');
       this.setMicrophoneEnabled(!this.pushToTalkMode || this.pushToTalkKeyHeld);
       this.startVoiceVisualizer(localStream);
 
@@ -424,6 +425,7 @@ export class GevRealtimeController {
       this.audioEl.autoplay = true;
       this.audioEl.dataset.gevRealtimeAudio = 'true';
       this.audioEl.style.display = 'none';
+      this.audioEl.onplay = () => console.log('[OPENAI VOICE] playback started');
       document.body.appendChild(this.audioEl);
 
       localPc = new RTCPeerConnection();
@@ -454,6 +456,7 @@ export class GevRealtimeController {
       const dataChannel = this.pc.createDataChannel('oai-events');
       this.dc = dataChannel;
       dataChannel.addEventListener('open', () => {
+        console.log('[OPENAI VOICE] connection opened');
         const detail = this.pushToTalkMode
           ? (this.pushToTalkKeyHeld ? 'Release Space to send' : 'Hold Space to talk')
           : 'Ask or command';
@@ -468,6 +471,7 @@ export class GevRealtimeController {
         this.fatalError('Realtime data channel', event, this.connectionDiagnostics(dataChannel));
       });
       dataChannel.addEventListener('close', () => {
+        console.log('[OPENAI VOICE] connection closed');
         if (this._tearingDown) return;
         if (this.dc === dataChannel && this.status !== 'idle' && this.status !== 'error') {
           this.fatalError('Realtime data channel closed', null, this.connectionDiagnostics(dataChannel));
@@ -547,6 +551,7 @@ export class GevRealtimeController {
       return;
     }
     if (state === 'disconnected') {
+      console.log('[OPENAI VOICE] reconnecting');
       if (this.disconnectGraceTimer) return;
       this.debugLog('webrtc.disconnected.grace', {
         graceMs: DISCONNECT_GRACE_MS,
@@ -887,6 +892,7 @@ export class GevRealtimeController {
       this.stopVoiceVisualizer();
       this.stream.getTracks().forEach((track) => track.stop());
       this.stream = null;
+      console.log('[OPENAI VOICE] microphone stopped');
     } else {
       this.stopVoiceVisualizer();
     }
@@ -1125,10 +1131,17 @@ export class GevRealtimeController {
     }
 
     if (payload.type === 'input_audio_buffer.speech_started') {
+      console.log('[OPENAI VOICE] user speech started');
       this.userTurnPending = true;
       this.pendingResponseInstructions = null;
       this.cancelRadioHandoff({ abortTools: true });
       this.setVoiceSpeaker('user');
+    }
+    if (payload.type === 'input_audio_buffer.speech_stopped') {
+      console.log('[OPENAI VOICE] user speech stopped');
+    }
+    if (payload.type === 'response.audio.delta' || payload.type === 'response.audio_transcript.delta') {
+      console.log('[OPENAI VOICE] model audio received');
     }
     this.updateResponseState(payload);
     // The spend cap may have just ended the session from inside the usage
@@ -1261,6 +1274,7 @@ export class GevRealtimeController {
           });
         }
         radioHandoffEpochAtStart = this.radioHandoffEpoch;
+        console.log('[OPENAI VOICE] tool call received:', call.name);
         this.debugLog('tool.call', {
           name: call.name,
           callId: call.call_id || call.id || null,
@@ -1427,6 +1441,7 @@ export class GevRealtimeController {
 
   sendToolOutput(callId, result) {
     if (!callId || !this.dc || this.dc.readyState !== 'open') return false;
+    console.log('[OPENAI VOICE] tool result sent:', callId);
     this.sendRealtimeEvent({
       type: 'conversation.item.create',
       item: {
@@ -1760,6 +1775,7 @@ export class GevRealtimeController {
     this.errors.unshift(record);
     this.errors.length = Math.min(this.errors.length, ERROR_LOG_LIMIT);
     storeErrors(this.errors);
+    console.log('[OPENAI VOICE] connection error:', record.title || source);
     console.error('[GEV Realtime]', record);
     this.debugLog('error', record);
     this.setStatus('error', formatErrorForDisplay(record));
@@ -1983,6 +1999,7 @@ export class GevRealtimeController {
 
   updateResponseState(payload) {
     if (payload.type === 'response.created') {
+      console.log('[OPENAI VOICE] model response started');
       this.responseActive = true;
       this.responseCreatePending = false;
       this.userTurnPending = false;

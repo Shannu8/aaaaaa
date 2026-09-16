@@ -347,20 +347,19 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * default; precise landmarks/buildings use close landmark framing.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
-
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () => beforeFly === null || beforeFly() !== false;
 
   // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
   // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
   // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+  // Route through the server-side proxy so the API key is never exposed in browser requests
+  // and browser-side key restrictions (HTTP referrer, API activation) don't affect geocoding.
   const bias = viewportBias(viewer);
-  if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
-  const data = await response.json();
+  const geocodeParams = new URLSearchParams({ address: query });
+  if (bias) geocodeParams.set('bounds', bias);
+  const geocodeResponse = await fetch(`/api/google/geocode?${geocodeParams}`);
+  const data = await geocodeResponse.json().catch(() => ({ status: 'ERROR', results: [] }));
 
   const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
   let lat = result?.geometry.location.lat;
@@ -380,6 +379,28 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     types = recovered.types || [];
     viewport = placesViewportToBounds(recovered.viewport) || viewport;
   } else if (!result) {
+    const poiMatch = findPoiByName(query);
+    if (poiMatch) {
+      return flyToPOI(viewer, poiMatch.cityId, poiMatch.index, options);
+    }
+    const cleanQ = query.trim().toLowerCase();
+    for (const [cityId, city] of Object.entries(CITY_POIS)) {
+      if (cleanQ === cityId || cleanQ === city.name.toLowerCase() || cleanQ.includes(city.name.toLowerCase())) {
+        return flyToPresetLocation(viewer, cityId, options);
+      }
+    }
+    const REGION_FALLBACKS = {
+      'antarctica': { lat: -75.0, lon: 0.0, range: 5000000 },
+      'antarctic': { lat: -75.0, lon: 0.0, range: 5000000 },
+      'antarctic peninsula': { lat: -68.0, lon: -65.0, range: 1500000 },
+      'north pole': { lat: 90.0, lon: 0.0, range: 5000000 },
+      'arctic': { lat: 75.0, lon: 0.0, range: 5000000 },
+    };
+    for (const [key, region] of Object.entries(REGION_FALLBACKS)) {
+      if (cleanQ.includes(key)) {
+        return flyToLandmark(viewer, region.lat, region.lon, { range: region.range, ...options });
+      }
+    }
     return null;
   }
 

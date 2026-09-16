@@ -429,7 +429,7 @@
       </div>
     </div>
     <div class="pp-toggle-group">
-      <button class="pp-toggle-btn active" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="true">
+      <button class="pp-toggle-btn" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
         <span class="pp-label">Scope</span>
       </button>
@@ -569,6 +569,38 @@
             </button>
             <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" />
           </div>
+        </div>
+        <div id="route-planner-container" class="route-planner-container">
+          <!-- Top location search & quick location pills -->
+          <div class="route-search-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <div class="route-search-input-wrap" style="flex:1;min-width:180px;display:flex;align-items:center;background:rgba(0,0,0,0.4);border:1px solid rgba(0,229,255,0.3);border-radius:20px;padding:4px 10px;">
+              <span style="color:#00e5ff;font-size:14px;margin-right:6px;">🔍</span>
+              <input type="text" id="route-location-search" class="route-search-input" placeholder="Search any location..." autocomplete="off" spellcheck="false" style="background:none;border:none;outline:none;color:#fff;font-family:sans-serif;font-size:11px;width:100%;" />
+            </div>
+            <div class="route-preset-pills" style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button type="button" class="route-preset-pill" data-location="austin">AUSTIN</button>
+              <button type="button" class="route-preset-pill" data-location="san francisco">SAN FRANCISCO</button>
+              <button type="button" class="route-preset-pill" data-location="new york">NEW YORK</button>
+              <button type="button" class="route-preset-pill" data-location="tokyo">TOKYO</button>
+              <button type="button" class="route-preset-pill" data-location="london">LONDON</button>
+            </div>
+          </div>
+
+          <div class="route-planner-header">
+            <span class="route-planner-title">SHORTEST ROUTE PLANNER</span>
+          </div>
+
+          <div class="route-planner-row">
+            <input type="text" id="route-initial-location" class="route-input" placeholder="Pin: latitude, longitude" autocomplete="off" spellcheck="false" aria-label="Start Pin Location" />
+            <input type="text" id="route-final-location" class="route-input" placeholder="Destination Pin Location" autocomplete="off" spellcheck="false" aria-label="Destination Pin Location" />
+          </div>
+
+          <div class="route-planner-actions">
+            <button id="route-place-pins-btn" type="button" class="route-btn route-btn-pins" title="Click globe to place Start & Destination pins">📍 PLACE PINS</button>
+            <button id="route-calculate-btn" type="button" class="route-btn route-btn-calc">CALCULATE SHORTEST PATH</button>
+            <button id="route-clear-btn" type="button" class="route-btn route-btn-clear">CLEAR PINS / ROUTE</button>
+          </div>
+          <div id="route-result-display" class="route-result-display" aria-live="polite"></div>
         </div>
       </div>
     </div>

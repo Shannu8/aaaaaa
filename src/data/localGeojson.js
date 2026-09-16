@@ -90,6 +90,24 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (layerId === 'local-icebergs' || layerId === 'local-icebergs-full') {
+    const area = props.Area_Mean_km2;
+    const areaRange = props.Area_Range_km2;
+    const depth = props.Bed_Depth;
+    const mode = props.Acquisition_Mode;
+    const date = props.Date_Range || props.Timestamp;
+    const status = props.Fast_Ice_Overlap_Status;
+
+    const line1 = [];
+    if (area != null) line1.push(`Area: ${Number(area).toFixed(2)} km²${areaRange != null ? ` (±${areaRange})` : ''}`);
+    if (depth != null) line1.push(`Bed: ${depth}m`);
+    if (line1.length) details.push(clampCardLine(line1.join(' · ')));
+
+    const line2 = [];
+    if (mode) line2.push(mode);
+    if (date) line2.push(date);
+    if (status) line2.push(status);
+    if (line2.length) details.push(clampCardLine(line2.join(' · ')));
   }
 
   return { title, details };
@@ -282,14 +300,17 @@ export function createLocalGeoJsonLayer({
   url,
   name,
   color,
-  icon = '📍',
-  source = 'Local JSONL',
+  icon,
+  source,
   labels = true,
   labelMax = DEFAULT_LABEL_MAX,
   labelGridPx = DEFAULT_LABEL_GRID_PX,
+  stems = true,
+  pointDistanceDisplayCondition = null,
+  polygonDistanceDisplayCondition = null,
   overlayHost = DEFAULT_OVERLAY_HOST,
-  screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
   projectToWindow = (scene, position) => Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
+  screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
 }) {
   let _dataSource = null;
   let _enabled = false;
@@ -469,36 +490,55 @@ export function createLocalGeoJsonLayer({
             const feature = entities[i];
             feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
             
-            let pos = feature.position?.getValue(Cesium.JulianDate.now());
-            
-            if (!pos) {
-              // It's a polygon or line
-              if (feature.polygon) {
-                feature.polygon.outline = true;
-                feature.polygon.outlineColor = baseColor;
-                
-                // Calculate center point for the stem
-                const hierarchy = feature.polygon.hierarchy?.getValue(Cesium.JulianDate.now());
-                if (hierarchy && hierarchy.positions && hierarchy.positions.length > 0) {
-                  pos = Cesium.BoundingSphere.fromPoints(hierarchy.positions).center;
-                }
+            if (feature.polygon) {
+              feature.polygon.outline = true;
+              feature.polygon.outlineColor = baseColor;
+              feature.polygon.material = baseColor.withAlpha(0.6);
+              if (polygonDistanceDisplayCondition) {
+                feature.polygon.distanceDisplayCondition = polygonDistanceDisplayCondition;
               }
             }
 
-            if (!pos) continue;
-
-            const carto = Cesium.Cartographic.fromCartesian(pos);
-            const groundHeight = 0; // Ellipsoid surface until a scene sample lands
-            const tipHeight = 2000; // Initial Stem height
-
-            const base = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, groundHeight);
-            const tip = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, tipHeight);
             const properties = propertyObject(feature);
             const recordId = String(feature.id ?? i);
 
-            // Store references for bounded stem scaling and native picking.
-            feature.__localBaseCarto = carto;
-            feature.__localBaseCartesian = base;
+            let pos = feature.position?.getValue(Cesium.JulianDate.now());
+            if (!pos && feature.polygon?.hierarchy) {
+              const hierarchy = feature.polygon.hierarchy.getValue(Cesium.JulianDate.now());
+              if (hierarchy && hierarchy.positions && hierarchy.positions.length > 0) {
+                pos = Cesium.BoundingSphere.fromPoints(hierarchy.positions).center;
+              }
+            }
+
+            let lat = 0, lon = 0;
+            if (pos) {
+              const carto = Cesium.Cartographic.fromCartesian(pos);
+              lat = Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6));
+              lon = Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6));
+            } else if (properties.Latitude != null && properties.Longitude != null) {
+              lat = Number(properties.Latitude);
+              lon = Number(properties.Longitude);
+              pos = Cesium.Cartesian3.fromDegrees(lon, lat);
+            }
+
+            if (pos && !feature.position) {
+              feature.position = pos;
+            }
+
+            // Always attach a point graphic so feature anchors are visible at globe distance
+            if (pos && !feature.point) {
+              feature.point = new Cesium.PointGraphics({
+                pixelSize: stems ? 10 : 6,
+                color: baseColor,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 1,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                ...(pointDistanceDisplayCondition ? { distanceDisplayCondition: pointDistanceDisplayCondition } : {}),
+              });
+            } else if (feature.point && pointDistanceDisplayCondition) {
+              feature.point.distanceDisplayCondition = pointDistanceDisplayCondition;
+            }
+
             registerEntityContext(feature, {
               id: `${id}:${recordId}`,
               layerId: id,
@@ -507,9 +547,23 @@ export function createLocalGeoJsonLayer({
               dataSource: loaded,
               label: featureLabelFromProperties(properties, id),
               properties,
-              latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6)),
-              longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6)),
+              latitude: lat,
+              longitude: lon,
             });
+
+            if (!stems) continue;
+            if (!pos) continue;
+
+            const carto = Cesium.Cartographic.fromCartesian(pos);
+            const groundHeight = 0; // Ellipsoid surface until a scene sample lands
+            const tipHeight = 2000; // Initial Stem height
+
+            const base = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, groundHeight);
+            const tip = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, tipHeight);
+
+            // Store references for bounded stem scaling and native picking.
+            feature.__localBaseCarto = carto;
+            feature.__localBaseCartesian = base;
 
             // Constant properties are refreshed on the existing 450 ms source
             // cadence. Cesium no longer evaluates 2-3 callbacks per entity on
@@ -558,6 +612,17 @@ export function createLocalGeoJsonLayer({
           // Setup finished — publish it.
           _dataSource = loaded;
           _lastUpdate = Date.now();
+
+          // Debug report requested for verification
+          const numPolygonEntities = entities.filter(e => Boolean(e.polygon)).length;
+          const numPointEntities = entities.filter(e => Boolean(e.point)).length;
+          console.log(`[DataLayer:${id}] Setup complete:`, {
+            featuresLoaded: features.length,
+            entitiesCreated: entities.length,
+            polygonEntities: numPolygonEntities,
+            pointEntities: numPointEntities,
+            layerVisibility: _dataSource ? _dataSource.show : false,
+          });
         } catch (e) {
           // The dataset ships with the build, so this is a broken install,
           // not a blip — it has to reach the chip, not just the console.
@@ -821,6 +886,7 @@ function featureLabelFromProperties(props, layerId) {
     tags.name,
     tags['name:en'],
     tags.official_name,
+    props.Global_UID,
     tags.operator,
     tags['operator:short'],
     props.operator,
@@ -888,5 +954,6 @@ function clampCardLine(value) {
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-icebergs' || layerId === 'local-icebergs-full') return 'Iceberg';
   return 'Feature';
 }

@@ -38,6 +38,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     clientExposed: true,
   }),
   Object.freeze({
+    id: 'gemini',
+    title: 'GOOGLE GEMINI',
+    unlocks: 'AI spatial intelligence & situational briefings',
+    getUrl: 'https://aistudio.google.com/app/apikey',
+    envVars: Object.freeze(['GEMINI_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'openai',
     title: 'OPENAI',
     unlocks: 'Voice control — talk to the planet',

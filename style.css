@@ -2039,8 +2039,9 @@ body.ui-clean-view #scene-runtime.active {
   text-transform: uppercase;
   transform: translateX(-50%);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 14px rgba(0, 212, 255, 0.08);
-  pointer-events: none;
+  pointer-events: none !important;
 }
+#global-loading-status * { pointer-events: none !important; }
 #global-loading-status[hidden] { display: none; }
 #global-loading-label {
   color: rgba(184, 244, 255, 0.92);
@@ -7420,7 +7421,7 @@ body.recording-mode #cesium-credits {
 /* ── Compact accordion command dock ──────────── */
 #command-dock {
   --dock-side-compact: clamp(9.5rem, 12vw, 10.5rem);
-  --dock-location-open: clamp(28rem, 40vw, 33rem);
+  --dock-location-open: min(54rem, 92vw);
   --dock-presets-open: clamp(25rem, 36vw, 29rem);
   --dock-voice-width: clamp(13.5rem, 17vw, 15rem);
   display: flex;
@@ -7829,7 +7830,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   --dock-pinned-stack-height: 0px;
   --dock-lower-pinned-height: 0px;
   --dock-unified-width: calc(var(--dock-side-compact) * 2 + var(--dock-voice-width));
-  --dock-location-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
+  --dock-location-open: max(52rem, calc(var(--dock-unified-width) + 0.75rem));
   --dock-presets-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
 }
 
@@ -8787,6 +8788,140 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
     0 0 1rem rgba(0, 212, 255, 0.12);
 }
 
+/* ── Shortest Route Planner ──────────────────── */
+.route-planner-container {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(10, 24, 38, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.route-planner-header {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #00f0ff;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.route-planner-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.route-input {
+  flex: 1 1 130px;
+  min-width: 110px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(123, 189, 211, 0.35);
+  border-radius: 4px;
+  padding: 6px 9px;
+  color: #ffffff;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.route-input:focus {
+  border-color: #00f0ff;
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+}
+.route-btn {
+  padding: 6px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+.route-btn-pins {
+  background: rgba(0, 240, 255, 0.15);
+  color: #00f0ff;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+}
+.route-btn-pins:hover,
+.route-btn-pins.active {
+  background: rgba(0, 240, 255, 0.35);
+  border-color: #00f0ff;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+.route-btn-calc {
+  background: #00f0ff;
+  color: #000000;
+}
+.route-btn-calc:hover {
+  background: #66f4ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+.route-btn-clear {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.route-btn-clear:hover {
+  background: rgba(255, 68, 68, 0.25);
+  color: #ff6666;
+  border-color: #ff4444;
+}
+.route-planner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+.route-result-display {
+  margin-top: 8px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d0e8ff;
+}
+.route-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(8, 16, 28, 0.95);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.route-result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.route-result-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.08em;
+}
+.route-result-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.route-result-val.route-dist {
+  color: #00f0ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.route-result-error {
+  color: #ff6666;
+  font-weight: 600;
+}
+
 #command-dock #location-bar .location-toolbar {
   justify-content: flex-start;
   width: 100%;
@@ -9682,4 +9817,257 @@ body.scene-playback-mode #key-setup {
   color: rgba(255, 190, 170, 1);
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
+}
+
+/* ── MARITIME ROUTE PLANNER ──────────────────────── */
+.route-planner-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(6, 16, 26, 0.95);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  color: #fff;
+  font-family: var(--font-sans);
+}
+
+.route-planner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+  padding-bottom: 6px;
+}
+
+.route-planner-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: #00e5ff;
+}
+
+.route-planner-row {
+  display: flex;
+  gap: 8px;
+}
+
+.route-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.route-input:focus {
+  border-color: #00e5ff;
+  outline: none;
+}
+
+.route-mode-selector-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.route-mode-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.route-mode-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: rgba(0, 229, 255, 0.9);
+}
+
+.route-mode-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.route-mode-tab {
+  flex: 1;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.route-mode-tab:hover {
+  border-color: #00e5ff;
+  color: #fff;
+}
+
+.route-mode-tab.active {
+  background: rgba(0, 229, 255, 0.25);
+  border-color: #00e5ff;
+  color: #00e5ff;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+}
+
+.route-mode-description {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+  padding: 2px 4px;
+}
+
+.route-planner-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.route-btn {
+  flex: 1;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.route-btn-pins {
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: #00e5ff;
+}
+
+.route-btn-pins.active {
+  background: #00e5ff;
+  color: #000;
+}
+
+.route-btn-calc {
+  background: #00e5ff;
+  border: 1px solid #00e5ff;
+  color: #000;
+  font-weight: 700;
+}
+
+.route-btn-calc:hover {
+  background: #55efff;
+  border-color: #55efff;
+}
+
+.route-btn-clear {
+  background: rgba(255, 51, 102, 0.15);
+  border: 1px solid rgba(255, 51, 102, 0.35);
+  color: #ff3366;
+}
+
+.route-btn-clear:hover {
+  background: rgba(255, 51, 102, 0.3);
+}
+
+.route-result-display {
+  margin-top: 6px;
+}
+
+.route-preset-pill {
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.route-preset-pill:hover {
+  border-color: #00e5ff;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.15);
+}
+
+/* ANTARIS Tactical Compass & Navigation UI */
+.tactical-compass-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.tactical-compass-svg-wrap {
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tactical-compass-readout {
+  flex: 1;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #fff;
+}
+
+.compass-needle-group {
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transform-origin: 45px 45px;
+}
+
+.voyage-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+
+.voyage-metric-item {
+  font-size: 9px;
+}
+
+.voyage-metric-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 8px;
+  display: block;
+  letter-spacing: 0.5px;
+  margin-bottom: 1px;
+}
+
+.voyage-metric-val {
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  font-family: monospace;
+}
+
+.wp-row.active-wp {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border-left: 3px solid #00e5ff !important;
 }

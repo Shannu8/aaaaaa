@@ -75,6 +75,8 @@ import {
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
 import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import { geminiLiveProxy } from './src/geminiLiveProxy.mjs';
+import { seaIceRoutingProxy } from './src/seaIceProxy.mjs';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2808,9 +2810,11 @@ function overpassProxy() {
         }
       });
 
-      // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
       // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
-      server.middlewares.use('/api/route', async (req, res) => {
+      server.middlewares.use('/api/route', async (req, res, next) => {
+        if (req.url.startsWith('/calculate') || req.method === 'POST') {
+          return next();
+        }
         const fail = (msg) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: msg }));
@@ -5645,6 +5649,80 @@ export function googlePlacesContextProxy() {
   };
 }
 
+/**
+ * Vite plugin: server-side Google Geocoding proxy for location search.
+ *
+ * Routes /api/google/geocode → maps.googleapis.com/maps/api/geocode/json
+ * so the API key never appears in browser requests. Uses the same
+ * GOOGLE_MAPS_API_KEY as the other Google API proxies.
+ *
+ * Query params forwarded: address (required), bounds (optional bias rect).
+ * Response: raw geocoding JSON { status, results } or an error envelope.
+ */
+export function googleGeocodingProxy() {
+  function install(middlewares) {
+    middlewares.use('/api/google/geocode', async (req, res) => {
+      if (req.method !== 'GET') {
+        res.statusCode = 405;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ status: 'ERROR', error: 'Method not allowed', results: [] }));
+        return;
+      }
+
+      let apiKey = String(process.env.GOOGLE_MAPS_API_KEY || '').trim();
+      if (!apiKey) {
+        try {
+          const loaded = loadEnv('development', process.cwd(), '');
+          apiKey = String(loaded.GOOGLE_MAPS_API_KEY || '').trim();
+        } catch {
+          /* best effort */
+        }
+      }
+      if (!apiKey) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({ status: 'REQUEST_DENIED', error: 'GOOGLE_MAPS_API_KEY not configured', results: [] }));
+        return;
+      }
+
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const params = new URLSearchParams(requestUrl.searchParams);
+      if (!params.has('address') && !params.has('latlng')) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ status: 'INVALID_REQUEST', error: 'address or latlng is required', results: [] }));
+        return;
+      }
+      params.set('key', apiKey);
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json().catch(() => ({ status: 'ERROR', results: [] }));
+        res.statusCode = response.ok ? 200 : response.status;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.end(JSON.stringify(data));
+      } catch (error) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ status: 'ERROR', error: error?.message || 'Geocoding request failed', results: [] }));
+      }
+    });
+  }
+
+  return {
+    name: 'google-geocoding-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+    },
+  };
+}
+
 function placeContextPriority(types) {
   const typeSet = new Set(types);
   if (typeSet.has('historical_landmark') || typeSet.has('monument')) return 100;
@@ -7468,6 +7546,99 @@ function normalizeAisTimestamp(value) {
 }
 
 /**
+ * Server-side Gemini API proxy endpoint.
+ *
+ * GET /api/gemini
+ * Default prompt: "Give me a short situational summary of Antarctica."
+ *
+ * POST /api/gemini
+ * Body: { prompt: "..." }
+ *
+ * Uses official Google GenAI SDK (@google/genai) and reads process.env.GEMINI_API_KEY.
+ * Never exposes GEMINI_API_KEY in client JS or response data.
+ */
+function geminiProxy() {
+  function install(middlewares) {
+    middlewares.use('/api/gemini', async (req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
+
+      if (req.method !== 'GET' && req.method !== 'POST') {
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+        return;
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || !apiKey.trim()) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({
+          error: 'GEMINI_API_KEY environment variable is not configured. Please set GEMINI_API_KEY in your environment or .env file.'
+        }));
+        return;
+      }
+
+      let prompt = 'Give me a short situational summary of Antarctica.';
+
+      if (req.method === 'POST') {
+        try {
+          const bodyText = await readRequestBodyCapped(req, 64 * 1024);
+          if (bodyText && bodyText.length > 0) {
+            const parsed = JSON.parse(bodyText.toString('utf8'));
+            if (parsed.prompt && typeof parsed.prompt === 'string') {
+              prompt = parsed.prompt.trim();
+            }
+          }
+        } catch (err) {
+          if (err.code === 'BODY_TOO_LARGE') {
+            res.statusCode = 413;
+            res.end(JSON.stringify({ error: 'Request body too large' }));
+            return;
+          }
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Invalid JSON request body' }));
+          return;
+        }
+      }
+
+      try {
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+        });
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({
+          success: true,
+          prompt,
+          response: response.text,
+          model: 'gemini-2.5-flash',
+        }));
+      } catch (err) {
+        console.error('[Gemini Proxy] Request failed:', err?.message || err);
+        res.statusCode = 500;
+        res.end(JSON.stringify({
+          error: 'Failed to generate response from Gemini API',
+          message: err?.message || 'Unknown error',
+        }));
+      }
+    });
+  }
+
+  return {
+    name: 'gemini-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+    },
+  };
+}
+
+/**
  * In-app key setup ("POWER UP" panel) — dev-server only.
  *
  * GET  /api/setup/status → which keys are configured, as presence plus a
@@ -7737,7 +7908,9 @@ export default defineConfig(({ mode }) => {
   // and no sibling workspace is consulted implicitly.
   const loaded = loadEnv(mode, __dirname, '');
   for (const [key, val] of Object.entries(loaded)) {
-    if (process.env[key] === undefined) process.env[key] = val;
+    if (!process.env[key] || (typeof val === 'string' && val.trim().length > 0 && !process.env[key].trim())) {
+      process.env[key] = val;
+    }
   }
   const env = { ...process.env };
   const localAllowedHosts = ['localhost', '127.0.0.1', '.local'];
@@ -7762,7 +7935,11 @@ export default defineConfig(({ mode }) => {
       aisLiveProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
+      seaIceRoutingProxy(),
       googlePlacesContextProxy(),
+      googleGeocodingProxy(),
+      geminiProxy(),
+      geminiLiveProxy(),
       keySetupEndpoint(),
     ],
     server: {
