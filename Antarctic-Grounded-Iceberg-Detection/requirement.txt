@@ -1,0 +1,21 @@
+# --- Array & Data Handling ---
+numpy==2.2.6
+pandas==2.3.3
+xarray==2025.10.1
+
+# --- Geospatial Stack ---
+geopandas==1.1.1
+rasterio==1.4.3
+shapely==2.1.2
+pyproj==3.7.2
+scipy==1.16.1
+
+# --- Deep Learning & Computer Vision ---
+torch==2.8.0
+torchvision==0.23.0
+opencv-python==4.12.0.88
+Pillow==11.3.0
+
+# --- Utilities ---
+psutil==7.0.0
+tqdm==4.67.1

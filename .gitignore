@@ -1,14 +1,49 @@
-node_modules
-dist
+# Node / Build / Dependency Output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.vite/
+.gev-cache/
+.gev-logs/
+
+# Python / Virtual Envs
+.venv/
+venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment Variables & Secrets
 .env
+.env.*
+!.env.example
+
+# Logs & Temporary Output
+logs/
 *.log
 screenshots/
 qa-shots/
 output/
-.gev-logs/
-.gev-cache/
 .DS_Store
 .gstack/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# Antarctic Grounded Iceberg Detection - Large Datasets & Heavy Model Weights
+Antarctic-Grounded-Iceberg-Detection/Train_Dataset/
+Antarctic-Grounded-Iceberg-Detection/Validation_Dataset/
+Antarctic-Grounded-Iceberg-Detection/Test_Dataset/
+Antarctic-Grounded-Iceberg-Detection/demo_data/
+Antarctic-Grounded-Iceberg-Detection/demo_data.zip
+Antarctic-Grounded-Iceberg-Detection/Grounded_Iceberg_Model_Dataset.zip
+Antarctic-Grounded-Iceberg-Detection/models/*.pth
+Antarctic-Grounded-Iceberg-Detection/models/*.pt
+Antarctic-Grounded-Iceberg-Detection/models/*.onnx
+Antarctic-Grounded-Iceberg-Detection/outputs/
+Antarctic-Grounded-Iceberg-Detection/results/
+Antarctic-Grounded-Iceberg-Detection/masks/
